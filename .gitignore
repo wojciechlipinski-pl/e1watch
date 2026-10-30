@@ -1,0 +1,6 @@
+__pycache__/
+*.egg-info/
+build/
+dist/
+tests/denylist.local.txt
+*.html

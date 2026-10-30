@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "e1watch"
+version = "0.1.0"
+description = "Console monitor for E1/T1 PRI links and ISDN channels (Asterisk + DAHDI)"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "GPL-3.0-or-later" }
+classifiers = [
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Environment :: Console :: Curses",
+    "Topic :: Communications :: Telephony",
+    "Topic :: System :: Monitoring",
+]
+
+[project.scripts]
+e1watch = "e1watch.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

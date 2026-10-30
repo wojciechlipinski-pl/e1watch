@@ -22,6 +22,9 @@ class Render(unittest.TestCase):
     def test_polish(self):
         self.assertIn('ŁĄCZE SPRAWNE', frame('ok', 'pl')); self.assertIn('Pomoc', frame('ok', 'pl'))
 
+    def test_help_polish_translated(self):
+        self.assertIn('zajęty (bez dzwonka)', frame('ok', 'pl', help=True))
+
     def test_help_and_small_terminal(self):
         self.assertIn('Link colour', frame('ok', help=True))
         for w, h in ((60, 20), (80, 24), (200, 60)): frame('ok', w=w, h=h); frame('alarm', w=w, h=h, help=True)

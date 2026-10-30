@@ -22,7 +22,7 @@ PL = {
     'Number mask: ': 'Maska numerów: ', 'Mask: ': 'Maska: ', 'on': 'wł.', 'off': 'wył.',
     'NO SIGNAL': 'BRAK SYGNAŁU', 'NO DATA': 'BRAK DANYCH', 'ALARM ': 'ALARM ', 'SIGNAL OK · ISDN INACTIVE': 'SYGNAŁ OK · ISDN NIEAKTYWNY', 'LINK OK': 'ŁĄCZE SPRAWNE',
     'Alarm ': 'Alarm ', '   D-channel ': '   Kanał D ', 'Busy ': 'Zajęte ', 'recent minutes ': 'ostatnie minuty ', 'no link: channels unavailable': 'brak łącza: kanały niedostępne',
-    'BUSY': 'ZAJĘTY', 'RINGING': 'WOŁANIE', 'CONNECTED': 'POŁĄCZONY', 'NEW': 'NOWE', 'ENDED': 'KONIEC', 'Interrupts: ': 'Przerwania: ',
+    'BUSY': 'ZAJĘTY', 'RINGING': 'WOŁANIE', 'CONNECTED': 'POŁĄCZONY', 'NEW': 'NOWE', 'ENDED': 'KONIEC',
     'free': 'wolny', 'busy': 'zajęty', 'ringing (blinks)': 'wołanie (miga)', 'connected': 'połączony', 'no link': 'brak łącza',
     ' Chan   Direction  State         Party A            Party B             Time': ' Kanał  Kierunek   Stan          Numer A            Numer B             Czas',
     '(no active calls)': '(brak aktywnych połączeń)', ' Events': ' Zdarzenia', '(no events since start)': '(brak zdarzeń od uruchomienia)', 'chan %-4d': 'kanał %-4d',
@@ -31,7 +31,7 @@ PL = {
     'Link colour:  GREEN   signal OK and ISDN active': 'Kolor łącza:  ZIELONY  sygnał OK i ISDN aktywny',
     '              YELLOW  signal OK, but ISDN (D-channel) inactive or errors': '              ŻÓŁTY    sygnał OK, ale ISDN (kanał D) nieaktywny lub błędy',
     '              RED     no signal / E1 alarm (failures only)': '              CZERWONY brak sygnału / alarm E1 (tylko awarie)',
-    'free   busy (no ringing)': 'wolny   zajęty (bez dzwonka)', 'ringing (cyan, blinks)   connected (blue, call in progress)': 'wołanie (cyan, miga)   połączony (niebieski, rozmowa w toku)',
+    'busy (no ringing)': 'zajęty (bez dzwonka)', 'ringing (cyan, blinks)': 'wołanie (cyan, miga)', 'connected (blue, call in progress)': 'połączony (niebieski, rozmowa w toku)',
     'no link (E1 alarm)': 'brak łącza (alarm E1)',
     'BPV/CRC4: green = no new errors, yellow/red = growing.': 'BPV/CRC4: zielone = bez nowych błędów, żółte/czerwone = rosnące.',
     'F2 or m  mask external numbers (middle digits)': 'F2 lub m  maskowanie numerów zewnętrznych (środek cyfr)',
@@ -62,6 +62,12 @@ def parse_ranges(text):
 
 
 def load_config(path=None):
+    try: return _load_config(path)
+    except (ValueError, configparser.Error) as e:
+        sys.exit('e1watch: bad configuration: %s' % e)
+
+
+def _load_config(path=None):
     cp = configparser.ConfigParser(interpolation=None)
     paths = [path] if path else [os.environ.get('E1WATCH_CONF')] + list(CONF_PATHS)
     cp.read([p for p in paths if p])
@@ -133,7 +139,7 @@ def parse_span(text):
     if not text: return None
     head = text.split('\n', 1)[0]
     name = re.search(r'"([^"]*)"', head)
-    alarm = re.search(ALARMS, head)
+    alarm = re.search(ALARMS, head.rsplit('"', 1)[-1])   # not in the card name
     bpv = re.search(r'BPV count: (\d+)', text); crc = re.search(r'CRC4 error count: (\d+)', text)
     chans = []
     for line in text.split('\n')[1:]:
@@ -160,7 +166,7 @@ def interrupts(pattern):
 
 def pri_spans():
     try:
-        out = subprocess.run(['asterisk', '-rx', 'pri show spans'], capture_output=True, text=True, timeout=4).stdout
+        out = subprocess.run(['asterisk', '-rx', 'pri show spans'], capture_output=True, text=True, timeout=4, check=False).stdout
     except Exception:
         return {}
     return {int(m.group(1)): m.group(2).strip() for m in re.finditer(r'PRI span (\d+)/\d+: (.+)', out)}
@@ -406,8 +412,8 @@ def frame(c, ui, y, x, h, w, color, title_parts):
     for i in range(1, h - 1): c.glyph(y + i, x, 'v', r); c.glyph(y + i, x + w - 1, 'v', r)
     c.glyph(y + h - 1, x, 'bl', r); c.hline(y + h - 1, x + 1, w - 2, r); c.glyph(y + h - 1, x + w - 1, 'br', r)
     cx = x + 2
-    for text, a in title_parts:
-        text = ui.T(text); c.put(y, cx, text, a); cx += len(text)
+    for part, a in title_parts:
+        text = ui.T(part); c.put(y, cx, text, a); cx += len(text)
 
 
 def table_header(c, ui, y, w, text):
@@ -472,7 +478,7 @@ def draw(c, m, ui, now=None, phase=0, spin=0):
         badge = ' ' + ui.T(label) + ' '
         c.put(y, width - len(badge) - 3, badge, Attr(color, bold=True, rev=not blink))
 
-        def counter(key, val):
+        def counter(key, val, n=n, ok=ok):
             if not ok or val is None: return '-', None
             p0 = m.last.get((n, key)); m.last[(n, key)] = (val, now)
             if not p0 or val < p0[0]: return str(int(val)), 0.0
@@ -553,7 +559,7 @@ def draw(c, m, ui, now=None, phase=0, spin=0):
 def help_window(c, ui):
     lines = ['E1/ISDN link and channel monitor', '',
              'Link colour:  GREEN   signal OK and ISDN active', '              YELLOW  signal OK, but ISDN (D-channel) inactive or errors', '              RED     no signal / E1 alarm (failures only)', '',
-             ui.sym('free') + '  ' + 'free   busy (no ringing)'.replace('free   busy', 'free   ' + ui.sym('BUSY') + '  busy'), ui.sym('RINGING') + '  ' + 'ringing (cyan, blinks)   connected (blue, call in progress)',
+             ui.sym('free') + '  ' + tr('free', ui.lang) + '   ' + ui.sym('BUSY') + '  ' + tr('busy (no ringing)', ui.lang), ui.sym('RINGING') + '  ' + tr('ringing (cyan, blinks)', ui.lang) + '   ' + ui.sym('CONNECTED') + '  ' + tr('connected (blue, call in progress)', ui.lang),
              ui.sym('none') + '  ' + 'no link (E1 alarm)', '',
              'BPV/CRC4: green = no new errors, yellow/red = growing.', '',
              'F2 or m  mask external numbers (middle digits)', 'F3 or s  show/hide spans after the first    F4 or z  events', 'F5 or r  refresh     F10 or q  quit     F1, ? or h  help', '',

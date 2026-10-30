@@ -9,7 +9,7 @@ BUILTIN = [r'\b10\.\d+\.\d+\.\d+\b', r'\b192\.168\.\d+\.\d+\b', r'\b172\.(1[6-9]
 
 def tracked():
     try:
-        out = subprocess.run(['git', 'ls-files', '-co', '--exclude-standard'], cwd=ROOT, capture_output=True, text=True).stdout.split('\n')
+        out = subprocess.run(['git', 'ls-files', '-co', '--exclude-standard'], cwd=ROOT, capture_output=True, text=True, check=False).stdout.split('\n')
     except OSError:
         out = []
     return [f for f in out if f and f != 'LICENSE' and not f.startswith('tests/test_hygiene')]

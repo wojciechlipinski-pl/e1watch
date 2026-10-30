@@ -23,6 +23,9 @@ class Parse(unittest.TestCase):
         self.assertEqual(app.parse_span(SPAN.replace(' RED', ''))['alarm'], 'OK')
         self.assertIsNone(app.parse_span(''))
 
+    def test_alarm_word_in_card_name_ignored(self):
+        self.assertEqual(app.parse_span(SPAN.replace('Test Card', 'RED Card').replace(' RED\n', '\n'))['alarm'], 'OK')
+
     def test_ranges(self):
         self.assertEqual(app.parse_ranges('1-3, 5,7-8'), [1, 2, 3, 5, 7, 8])
 

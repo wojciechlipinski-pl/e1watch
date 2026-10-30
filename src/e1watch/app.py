@@ -74,7 +74,7 @@ def load_config(path=None):
             'lang': g('e1watch', 'lang', 'en'), 'mask': g('e1watch', 'mask', 'yes').lower() in ('1', 'yes', 'true', 'on'),
             'inbound_contexts': tuple(x for x in re.split(r'[,\s]+', g('e1watch', 'inbound_contexts')) if x),
             'irq_pattern': g('e1watch', 'irq_pattern', IRQ_DEFAULT), 'clock_state_file': g('e1watch', 'clock_state_file'),
-            'keep_digits': int(g('e1watch', 'unmasked_max_digits', '6')), 'spans': {}}
+            'keep_digits': int(g('e1watch', 'unmasked_max_digits', '6')), 'only_spans': parse_ranges(g('e1watch', 'spans')), 'spans': {}}
     for sec in cp.sections():
         m = re.fullmatch(r'span\.(\d+)', sec)
         if m: conf['spans'][int(m.group(1))] = {'name': g(sec, 'name'), 'channels': parse_ranges(g(sec, 'channels'))}
@@ -235,6 +235,7 @@ class Model:
             det = {1: {'name': 'Carrier PRI', 'channels': ch}, 2: {'name': 'Test link', 'channels': [c + 93 for c in ch]}}
         else:
             det = detect_spans()
+        if self.conf['only_spans'] and not self.demo: det = {n: d for n, d in det.items() if n in self.conf['only_spans']}
         for n, d in self.conf['spans'].items():
             base = det.get(n, {'name': '', 'channels': []})
             det[n] = {'name': d['name'] or base['name'], 'channels': d['channels'] or base['channels']}

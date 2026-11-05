@@ -7,9 +7,9 @@ Shows per span: line alarm state, D-channel status, BPV/CRC4 counters and a colo
 Data sources: Asterisk AMI (CoreShowChannels), /proc/dahdi/N, /proc/interrupts and `asterisk -rx "pri show spans"`.
 Link colour: GREEN = signal OK and ISDN active, YELLOW = signal OK but ISDN (D-channel) inactive, RED = no signal / E1 alarm.
 """
-import argparse, collections, configparser, curses, glob, html, math, os, random, re, socket, subprocess, sys, textwrap, time, unicodedata
+import argparse, collections, configparser, curses, glob, math, os, random, re, socket, subprocess, sys, textwrap, time, unicodedata
 
-VERSION = '0.1.0'
+VERSION = '0.1.3'
 CONF_PATHS = ('/etc/e1watch.conf', os.path.expanduser('~/.config/e1watch.ini'))
 STATE_COLOR = {'BUSY': 'yellow', 'RINGING': 'cyan', 'CONNECTED': 'blue'}   # red is reserved for failures (alarm, no link)
 IRQ_DEFAULT = r'dahdi|wct|wcte|tor3|tormenta|t[24]xxp|te[0-9]xx'
@@ -42,14 +42,13 @@ PL = {
 }
 
 
+PL_CORE = {k.strip(): v.strip() for k, v in PL.items()}
+
+
 def tr(s, lang):
-    if lang != 'pl': return s
-    if s in PL: return PL[s]
-    core = s.strip()   # same phrase with different padding
-    if core in PL: return s[:len(s) - len(s.lstrip())] + PL[core] + s[len(s.rstrip()):]
-    for k, v in PL.items():
-        if k.strip() == core: return s[:len(s) - len(s.lstrip())] + v.strip() + s[len(s.rstrip()):]
-    return s
+    core = s.strip()   # the same phrase appears with different padding
+    if lang != 'pl' or core not in PL_CORE: return s
+    return s[:len(s) - len(s.lstrip())] + PL_CORE[core] + s[len(s.rstrip()):]
 
 
 # ------------------------------------------------------------------ configuration
@@ -80,7 +79,7 @@ def _load_config(path=None):
             'lang': g('e1watch', 'lang', 'en'), 'mask': g('e1watch', 'mask', 'yes').lower() in ('1', 'yes', 'true', 'on'),
             'inbound_contexts': tuple(x for x in re.split(r'[,\s]+', g('e1watch', 'inbound_contexts')) if x),
             'irq_pattern': g('e1watch', 'irq_pattern', IRQ_DEFAULT), 'clock_state_file': g('e1watch', 'clock_state_file'),
-            'keep_digits': int(g('e1watch', 'unmasked_max_digits', '6')), 'only_spans': parse_ranges(g('e1watch', 'spans')), 'spans': {}}
+            'only_spans': parse_ranges(g('e1watch', 'spans')), 'spans': {}}
     for sec in cp.sections():
         m = re.fullmatch(r'span\.(\d+)', sec)
         if m: conf['spans'][int(m.group(1))] = {'name': g(sec, 'name'), 'channels': parse_ranges(g(sec, 'channels'))}
@@ -124,6 +123,19 @@ class AMI:
             if b.get('Event') == 'CoreShowChannel': out.append(b)
             elif b.get('Event') == 'CoreShowChannelsComplete': return out
             elif b.get('Response') == 'Error': raise RuntimeError('AMI: ' + b.get('Message', '?'))
+
+    def dahdi_map(self):
+        """{asterisk channel name: DAHDI B-channel number} from AMI DAHDIShowChannels (calls on the ISDN group `DAHDI/i1/<number>-N`
+        carry the dialled number in the name, not the B-channel). Returns None when the action is unavailable (the caller then falls back to the name)."""
+        self._send({'Action': 'DAHDIShowChannels'})
+        out = {}
+        while True:
+            b = self._block()
+            if b.get('Response') == 'Error': return None
+            if b.get('Event') == 'DAHDIShowChannels':
+                ch, n = b.get('Channel', ''), b.get('DAHDIChannel', '')
+                if ch.startswith('DAHDI/') and n.isdigit(): out[ch] = int(n)
+            elif b.get('Event') == 'DAHDIShowChannelsComplete': return out
 
 
 def read_file(path):
@@ -193,16 +205,19 @@ def fmt_time(s):
     s = int(s); return '%02d:%02d:%02d' % (s // 3600, s % 3600 // 60, s % 60)
 
 
-def calls_from_channels(chans, inbound_contexts=()):
+def calls_from_channels(chans, inbound_contexts=(), chan_map=None):
     """Maps AMI CoreShowChannels rows to {dahdi channel: call}. Direction: a DAHDI leg that started the call
-    (Uniqueid == Linkedid) is inbound from the PSTN; inbound_contexts, when configured, overrides the heuristic."""
+    (Uniqueid == Linkedid) is inbound from the PSTN; a current context listed in inbound_contexts also counts as inbound (the context of a
+    bridged leg changes during the call, so it cannot be the only test). chan_map (from AMI DAHDIShowChannels) gives the real B-channel;
+    without it the number is taken from the channel name."""
     out = {}
     for c in chans:
-        n = channel_number(c.get('Channel'))
+        name = c.get('Channel')
+        if chan_map is not None and name and name.startswith('DAHDI/'): n = chan_map.get(name)
+        else: n = channel_number(name)
         if n is None: continue
-        if inbound_contexts: inbound = c.get('Context') in inbound_contexts
-        elif c.get('Uniqueid') and c.get('Linkedid'): inbound = c['Uniqueid'] == c['Linkedid']
-        else: inbound = False
+        inbound = c.get('Context') in inbound_contexts if inbound_contexts else False
+        if not inbound and c.get('Uniqueid') and c.get('Linkedid'): inbound = c['Uniqueid'] == c['Linkedid']
         st = call_state(c.get('ChannelStateDesc'))
         a = c.get('CallerIDNum', ''); b = c.get('ConnectedLineNum', '') or c.get('Exten', '')
         if inbound and st != 'CONNECTED': b = c.get('Exten', '') or b
@@ -220,10 +235,10 @@ def demo_channels(t, scenario):
              'ConnectedLineNum': b if k == 'OUT' else '', 'Duration': '00:%02d:%02d' % (random.randint(0, 5), random.randint(0, 59))} for n, k, s, a, b in rows[:random.randint(3, 5)]]
 
 
-def mask_number(num, mask, keep=6):
+def mask_number(num, mask):
     num = (num or '').strip()
     if not num: return '-'
-    if not mask or len(num) <= keep: return num
+    if not mask or len(num) <= 6: return num
     return num[:3] + '*' * (len(num) - 6) + num[-3:]
 
 
@@ -243,6 +258,7 @@ class Model:
             det = detect_spans()
         if self.conf['only_spans'] and not self.demo: det = {n: d for n, d in det.items() if n in self.conf['only_spans']}
         for n, d in self.conf['spans'].items():
+            if self.conf['only_spans'] and not self.demo and n not in self.conf['only_spans']: continue   # a [span.N] section does not bring back a span excluded by spans =
             base = det.get(n, {'name': '', 'channels': []})
             det[n] = {'name': d['name'] or base['name'], 'channels': d['channels'] or base['channels']}
         self.spans = {n: (d['name'] or 'span %d' % n, d['channels']) for n, d in sorted(det.items())}
@@ -288,7 +304,8 @@ class Model:
             if self.demo: new = calls_from_channels(demo_channels(t, self.scen), self.conf['inbound_contexts'])
             else:
                 if self.ami is None: self.ami = AMI(self.conf); self.ami.connect()
-                new = calls_from_channels(self.ami.channels(), self.conf['inbound_contexts'])
+                chans = self.ami.channels(); cmap = self.ami.dahdi_map()
+                new = calls_from_channels(chans, self.conf['inbound_contexts'], cmap)
             self.error = ''
         except Exception as e:
             self.ami = None; new = {}; self.error = 'AMI: %s' % e
@@ -330,32 +347,6 @@ class TextCanvas:
 
     def text(self):
         return '\n'.join(''.join(c for c, _ in row).rstrip() for row in self.g)
-
-    def html(self):
-        css = {'green': '#3ddc5a', 'yellow': '#f0c93a', 'red': '#ff4d4d', 'cyan': '#3dd6e0', 'blue': '#4f9dff'}
-        out = []
-        for row in self.g:
-            line = []
-            for ch, (fg, bold, dim, rev) in row:
-                col, bg, extra = '#d8d8d8', '#101010', []
-                if fg == 'key': col, bg = '#0a8a8a', '#e8e8e8'
-                elif fg == 'sel': col, bg = '#000000', css['cyan']
-                elif fg in css:
-                    if rev: col, bg = '#101010', css[fg]
-                    else: col = css[fg]
-                elif rev: col, bg = '#101010', '#e8e8e8'
-                if dim: extra.append('opacity:.6')
-                if bold: extra.append('font-weight:bold')
-                line.append('<span style="color:%s;background:%s;%s">%s</span>' % (col, bg, ';'.join(extra), html.escape(ch)))
-            out.append(''.join(line))
-        return '\n'.join(out)
-
-    @staticmethod
-    def html_anim(f0, f1):
-        st = "font:15px/1.2 'DejaVu Sans Mono',Menlo,monospace;color:#d8d8d8;margin:0;position:absolute;top:12px;left:12px"
-        return ('<!doctype html><meta charset="utf-8"><style>@keyframes a{0%%{opacity:1}50%%{opacity:0}}@keyframes b{0%%{opacity:0}50%%{opacity:1}}'
-                '#f0{animation:a 1s steps(1) infinite}#f1{animation:b 1s steps(1) infinite}</style>'
-                '<body style="background:#101010;margin:0"><pre id="f0" style="%s">%s</pre><pre id="f1" style="%s">%s</pre>' % (st, f0, st, f1))
 
 
 class CursesCanvas:
@@ -527,10 +518,9 @@ def draw(c, m, ui, now=None, phase=0, spin=0):
         ring = r['state'] == 'RINGING'; hl = ring and phase == 0
         if hl: c.put(y, 0, ' ' * (w - 1), Attr('cyan', bold=True, rev=True))   # whole row lights up while ringing
         A = (lambda **k: Attr('cyan', bold=True, rev=True)) if hl else (lambda **k: Attr(**k))
-        keep = m.conf['keep_digits']
         c.put(y, 1, '%5d' % ch, A(bold=True)); c.put(y, 8, ui.T(direction), A()); c.put(y, 18, spinner if ring else ui.sym(r['state']), Attr(fg, bold=True, rev=hl))
         c.put(y, 20, ui.T(r['state']).ljust(11), Attr(fg, bold=True, rev=r['state'] == 'CONNECTED' or hl))
-        c.put(y, 33, mask_number(r['a'], ui.mask, keep).ljust(18), A(bold=True)); c.put(y, 51, ui.T('→ ') + mask_number(r['b'], ui.mask, keep).ljust(16), A(bold=True))
+        c.put(y, 33, mask_number(r['a'], ui.mask).ljust(18), A(bold=True)); c.put(y, 51, ui.T('→ ') + mask_number(r['b'], ui.mask).ljust(16), A(bold=True))
         c.put(y, 71, fmt_time(r['sec'] + now - m.t_poll), A(dim=True) if not hl else A()); y += 1
     # event log (new entries flash for 3 s)
     if ui.events and y + 4 < h - 1:
@@ -542,9 +532,8 @@ def draw(c, m, ui, now=None, phase=0, spin=0):
             fg = None if kind == 'ENDED' else STATE_COLOR[state]
             text = ui.T('ENDED') + (' (%s)' % dur if dur else '') if kind == 'ENDED' else (ui.T('NEW') + ' ' if kind == 'NEW' else '') + ui.T(state)
             flash = now - ts < 3
-            keep = m.conf['keep_digits']
             c.put(y, 1, t, Attr(dim=not flash, bold=flash)); c.put(y, 10, ui.T('chan %-4d' % ch), Attr(bold=flash))
-            c.put(y, 21, ui.T('PSTN→PBX' if d == 'IN' else 'PBX→PSTN'), Attr(bold=flash)); c.put(y, 31, '%s %s %s' % (mask_number(a, ui.mask, keep), ui.T('→'), mask_number(b, ui.mask, keep)), Attr(bold=flash))
+            c.put(y, 21, ui.T('PSTN→PBX' if d == 'IN' else 'PBX→PSTN'), Attr(bold=flash)); c.put(y, 31, '%s %s %s' % (mask_number(a, ui.mask), ui.T('→'), mask_number(b, ui.mask)), Attr(bold=flash))
             c.put(y, 62, ' ' + text + ' ', Attr(fg, bold=True, rev=flash)); y += 1
     # footer bar in the Midnight Commander / ZoneCTL style
     actions = (('F1', 'Help'), ('F2', 'Mask'), ('F3', 'Spans'), ('F4', 'Events'), ('F5', 'Refresh'), ('F10', 'Quit'))
@@ -637,24 +626,15 @@ def main(argv=None):
     ap.add_argument('--once', action='store_true', help='print one frame as text and exit')
     ap.add_argument('--demo', nargs='?', const='ok', choices=['ok', 'alarm', 'd'], help='simulated data (ok | alarm | d)')
     ap.add_argument('--no-mask', action='store_true', help='do not mask external numbers'); ap.add_argument('--lang', choices=['en', 'pl'])
-    ap.add_argument('--ascii', action='store_true'); ap.add_argument('--size', default='120x34', help='frame size for --once/--html')
-    ap.add_argument('--html', metavar='FILE', help='write a blinking HTML preview'); ap.add_argument('--help-screen', action='store_true', help='render the help window in --once')
-    ap.add_argument('--phase', type=int, default=0, choices=[0, 1]); ap.add_argument('--version', action='version', version='e1watch ' + VERSION)
+    ap.add_argument('--ascii', action='store_true'); ap.add_argument('--size', default='120x34', help='frame size for --once')
+    ap.add_argument('--version', action='version', version='e1watch ' + VERSION)
     a = ap.parse_args(argv)
     conf = load_config(a.config)
     m = Model(conf, bool(a.demo), a.demo or 'ok'); ui = Ui(unicode_ok(a), conf['mask'] and not a.no_mask, a.lang or conf['lang'])
-    if a.once or a.html:
-        m.refresh(); time.sleep(1); m.refresh(); ui.help = a.help_screen
-        w, h = (int(v) for v in a.size.split('x')); ui.u = unicode_ok(a) or (a.html is not None and not a.ascii)
-        now = time.time()
-        if a.html:
-            frames = []
-            for phase in (0, 1):
-                c = TextCanvas(w, h, ui.u); draw(c, m, ui, now, phase, phase * 2); frames.append(c.html())
-            with open(a.html, 'w') as f: f.write(TextCanvas.html_anim(*frames))
-            print('written', a.html)
-        else:
-            c = TextCanvas(w, h, ui.u); draw(c, m, ui, now, a.phase, a.phase * 2); print(c.text())
+    if a.once:
+        m.refresh(); time.sleep(1); m.refresh()
+        w, h = (int(v) for v in a.size.split('x'))
+        c = TextCanvas(w, h, ui.u); draw(c, m, ui, time.time()); print(c.text())
         return 0
     os.environ.setdefault('ESCDELAY', '25')
     curses.wrapper(lambda s: curses_main(s, m, ui))

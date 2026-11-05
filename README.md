@@ -74,7 +74,6 @@ Copy [examples/e1watch.conf](examples/e1watch.conf) to `/etc/e1watch.conf` (mode
 sudo e1watch                 # live screen
 e1watch --once               # one text frame (--size 120x35, --ascii)
 e1watch --demo [ok|alarm|d]  # simulated data, no Asterisk needed
-e1watch --html preview.html  # blinking HTML preview
 e1watch --lang pl --no-mask
 ```
 

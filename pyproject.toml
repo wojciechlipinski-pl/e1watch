@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "e1watch"
-version = "0.1.0"
+version = "0.1.3"
 description = "Console monitor for E1/T1 PRI links and ISDN channels (Asterisk + DAHDI)"
 readme = "README.md"
 requires-python = ">=3.8"

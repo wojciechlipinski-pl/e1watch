@@ -41,7 +41,6 @@ Skopiuj [examples/e1watch.conf](examples/e1watch.conf) do `/etc/e1watch.conf` (t
 sudo e1watch                 # ekran na żywo
 e1watch --once               # jedna klatka tekstem (--size 120x35, --ascii)
 e1watch --demo [ok|alarm|d]  # dane symulowane, bez Asteriska
-e1watch --html podglad.html  # podgląd HTML z miganiem
 e1watch --lang pl --no-mask
 ```
 

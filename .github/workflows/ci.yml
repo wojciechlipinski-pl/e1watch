@@ -2,8 +2,9 @@ name: ci
 on: [push, pull_request]
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04   # setup-python has no Python 3.8 for newer images
     strategy:
+      fail-fast: false
       matrix:
         python: ["3.8", "3.12"]
     steps:

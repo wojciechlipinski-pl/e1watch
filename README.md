@@ -6,35 +6,35 @@ One screen shows the line state per span, the D-channel, error counters and ever
 Polish version: [README.pl.md](README.pl.md)
 
 ```
- ● E1 Watch 0.1.0           E1 link and ISDN channel monitor  [DEMO: ok]           host  22:29:05
+ ● E1 Watch 0.1.3             E1 link and ISDN channel monitor  [DEMO: ok]             host    08:25:56
 
- Clock: line   Interrupts: 1000/s   Calls: 4 (ringing 2, connected 2)   Free channels: 26   Number m
+ Clock: line   Interrupts: 1000/s   Calls: 5 (ringing 2, connected 2)   Free channels: 25   Number mask:
 
-┌─ ● SPAN 1  Carrier PRI ─────────────────────────────────────────────────────────────── LINK OK ──┐
-│ Alarm  OK     D-channel Up, Active   BPV 0   CRC4 0                                              │
-│ Busy    4/30 ███░░░░░░░░░░░░░░░░░  13%  recent minutes  ▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂                         │
-│   1○   2○   3●   4○   5○   6○   7◐   8○   9○  10○  11○  12◐  13○  14○  15○                       │
-│  17○  18●  19○  20○  21○  22○  23○  24○  25○  26○  27○  28○  29○  30○  31○                       │
-└──────────────────────────────────────────────────────────────────────────────────────────────────┘
-┌─ ● SPAN 2  Test link ─────────────────────────────────────────────────────────────── NO SIGNAL ──┐
-│ Alarm  RED     D-channel In Alarm, Down, Active   BPV -   CRC4 -                                 │
-│ no link: channels unavailable                                                                    │
-│  94·  95·  96·  97·  98·  99· 100· 101· 102· 103· 104· 105· 106· 107· 108·                       │
-│ 110· 111· 112· 113· 114· 115· 116· 117· 118· 119· 120· 121· 122· 123· 124·                       │
-└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ ● SPAN 1  Carrier PRI ─────────────────────────────────────────────────────────────────── LINK OK ──┐
+│ Alarm  OK     D-channel Up, Active   BPV 0   CRC4 0                                                  │
+│ Busy    5/30 ███░░░░░░░░░░░░░░░░░  16%  recent minutes  ▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂                             │
+│   1○   2○   3●   4○   5○   6○   7◐   8○   9○  10○  11○  12◐  13○  14○  15○                           │
+│  17○  18●  19○  20○  21○  22●  23○  24○  25○  26○  27○  28○  29○  30○  31○                           │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ ● SPAN 2  Test link ─────────────────────────────────────────────────────────────────── NO SIGNAL ──┐
+│ Alarm  RED     D-channel In Alarm, Down, Active   BPV -   CRC4 -                                     │
+│ no link: channels unavailable                                                                        │
+│  94·  95·  96·  97·  98·  99· 100· 101· 102· 103· 104· 105· 106· 107· 108·                           │
+│ 110· 111· 112· 113· 114· 115· 116· 117· 118· 119· 120· 121· 122· 123· 124·                           │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────┘
  ○ free  ● busy  ◐ ringing (blinks)  ● connected  · no link
 
  Chan   Direction  State         Party A            Party B             Time
-───────────────────────────────────────────────────────────────────────────────────────────────────
-     3  PSTN→PBX  ● CONNECTED    491*******123     → 1001              00:00:15
-     7  PBX→PSTN  ◐ RINGING      1002              → 491*******456     00:05:39
+───────────────────────────────────────────────────────────────────────────────────────────────────────
+     3  PSTN→PBX  ● CONNECTED    491*******123     → 1001              00:03:06
+     7  PBX→PSTN  ◐ RINGING      1002              → 491*******456     00:01:07
 
  Events
-───────────────────────────────────────────────────────────────────────────────────────────────────
- 22:29:04 chan 18    PBX→PSTN  1004 → 494*******099            NEW CONNECTED
- 22:29:04 chan 12    PSTN→PBX  493*******078 → 1003            NEW RINGING
- 22:29:04 chan 7     PBX→PSTN  1002 → 491*******456            NEW RINGING
- 22:29:04 chan 3     PSTN→PBX  491*******123 → 1001            NEW CONNECTED
+───────────────────────────────────────────────────────────────────────────────────────────────────────
+ 08:25:55 chan 22    PSTN→PBX  - → -                           NEW BUSY
+ 08:25:55 chan 18    PBX→PSTN  1004 → 494*******099            NEW CONNECTED
+ 08:25:55 chan 12    PSTN→PBX  493*******078 → 1003            NEW RINGING
+ 08:25:55 chan 7     PBX→PSTN  1002 → 491*******456            NEW RINGING
  F1 Help  F2 Mask  F3 Spans  F4 Events  F5 Refresh  F10 Quit
 ```
 

@@ -8,7 +8,7 @@ One screen shows the line state per span, the D-channel, error counters and ever
 Polish version: [README.pl.md](README.pl.md)
 
 ```
- ● E1 Watch 0.1.3             E1 link and ISDN channel monitor  [DEMO: ok]             host    08:25:56
+ ● E1 Watch 0.1.4             E1 link and ISDN channel monitor  [DEMO: ok]             host    08:25:56
 
  Clock: line   Interrupts: 1000/s   Calls: 5 (ringing 2, connected 2)   Free channels: 25   Number mask:
 
@@ -88,7 +88,7 @@ Keys: `F1`/`?` help, `F2`/`m` number mask, `F3`/`s` extra spans, `F4`/`z` events
 | Alarm, BPV, CRC4, channels | `/proc/dahdi/N` |
 | D-channel (Up/Down/Alarm) | `asterisk -rx "pri show spans"` |
 | Calls, parties, duration | AMI `CoreShowChannels` |
-| Direction | DAHDI leg that started the call (`Uniqueid == Linkedid`) = inbound; or `inbound_contexts` |
+| Direction | DAHDI leg that started the call (`Uniqueid == Linkedid`) = inbound; `inbound_contexts` only as a fallback when AMI gives no Linkedid |
 | Interrupt rate | `/proc/interrupts` (`irq_pattern`) |
 
 ## Tests

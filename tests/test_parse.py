@@ -39,9 +39,14 @@ class Parse(unittest.TestCase):
         c = app.calls_from_channels(rows)
         self.assertEqual((c[3]['dir'], c[3]['state']), ('IN', 'CONNECTED')); self.assertEqual((c[4]['dir'], c[4]['state']), ('OUT', 'RINGING'))
 
-    def test_inbound_contexts_override(self):
-        rows = [{'Channel': 'DAHDI/3-1', 'Uniqueid': '1', 'Linkedid': '2', 'Context': 'from-pstn', 'ChannelStateDesc': 'Up'}]
+    def test_inbound_contexts_only_fallback(self):
+        # without Uniqueid/Linkedid the context decides ...
+        rows = [{'Channel': 'DAHDI/3-1', 'Context': 'from-pstn', 'ChannelStateDesc': 'Up'}]
         self.assertEqual(app.calls_from_channels(rows, ('from-pstn',))[3]['dir'], 'IN')
+        # ... but never overrides Linkedid: an outbound DAHDI leg has the channel's default context too
+        out = [{'Channel': 'DAHDI/3-1', 'Uniqueid': '3', 'Linkedid': '2', 'Context': 'from-pstn', 'ChannelStateDesc': 'Ring',
+                'CallerIDNum': '0044078799246873', 'Exten': '004407879924'}]
+        self.assertEqual(app.calls_from_channels(out, ('from-pstn',))[3]['dir'], 'OUT')
 
     def test_mask(self):
         self.assertEqual(app.mask_number('4915550100123', True), '491*******123')

@@ -9,7 +9,7 @@ Link colour: GREEN = signal OK and ISDN active, YELLOW = signal OK but ISDN (D-c
 """
 import argparse, collections, configparser, curses, glob, math, os, random, re, socket, subprocess, sys, textwrap, time, unicodedata
 
-VERSION = '0.1.3'
+VERSION = '0.1.4'
 CONF_PATHS = ('/etc/e1watch.conf', os.path.expanduser('~/.config/e1watch.ini'))
 STATE_COLOR = {'BUSY': 'yellow', 'RINGING': 'cyan', 'CONNECTED': 'blue'}   # red is reserved for failures (alarm, no link)
 IRQ_DEFAULT = r'dahdi|wct|wcte|tor3|tormenta|t[24]xxp|te[0-9]xx'
@@ -207,17 +207,17 @@ def fmt_time(s):
 
 def calls_from_channels(chans, inbound_contexts=(), chan_map=None):
     """Maps AMI CoreShowChannels rows to {dahdi channel: call}. Direction: a DAHDI leg that started the call
-    (Uniqueid == Linkedid) is inbound from the PSTN; a current context listed in inbound_contexts also counts as inbound (the context of a
-    bridged leg changes during the call, so it cannot be the only test). chan_map (from AMI DAHDIShowChannels) gives the real B-channel;
-    without it the number is taken from the channel name."""
+    (Uniqueid == Linkedid) is inbound from the PSTN. inbound_contexts is only a fallback for rows without Uniqueid/Linkedid: an outbound
+    DAHDI leg usually carries the channel's default context too, so a context must never override Linkedid. chan_map (from AMI
+    DAHDIShowChannels) gives the real B-channel; without it the number is taken from the channel name."""
     out = {}
     for c in chans:
         name = c.get('Channel')
         if chan_map is not None and name and name.startswith('DAHDI/'): n = chan_map.get(name)
         else: n = channel_number(name)
         if n is None: continue
-        inbound = c.get('Context') in inbound_contexts if inbound_contexts else False
-        if not inbound and c.get('Uniqueid') and c.get('Linkedid'): inbound = c['Uniqueid'] == c['Linkedid']
+        if c.get('Uniqueid') and c.get('Linkedid'): inbound = c['Uniqueid'] == c['Linkedid']
+        else: inbound = c.get('Context') in inbound_contexts if inbound_contexts else False
         st = call_state(c.get('ChannelStateDesc'))
         a = c.get('CallerIDNum', ''); b = c.get('ConnectedLineNum', '') or c.get('Exten', '')
         if inbound and st != 'CONNECTED': b = c.get('Exten', '') or b

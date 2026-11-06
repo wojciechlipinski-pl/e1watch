@@ -3,6 +3,8 @@
 Konsolowy monitor **łączy E1/T1 PRI i kanałów B ISDN** dla Asteriska z DAHDI.
 Jeden ekran pokazuje stan łącza dla każdego spanu, kanał D, liczniki błędów i każdy kanał B (wolny / zajęty / wołanie / połączony) wraz z numerami obu uczestników rozmowy.
 
+![ekran demo e1watch](docs/screenshot.png)
+
 English version: [README.md](README.md)
 
 ## Funkcje

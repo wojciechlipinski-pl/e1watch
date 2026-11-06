@@ -3,6 +3,8 @@
 Console monitor for **E1/T1 PRI links and ISDN B-channels** on Asterisk + DAHDI.
 One screen shows the line state per span, the D-channel, error counters and every B-channel (free / busy / ringing / connected) together with both call parties.
 
+![e1watch demo screen](docs/screenshot.png)
+
 Polish version: [README.pl.md](README.pl.md)
 
 ```

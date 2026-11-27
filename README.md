@@ -8,7 +8,7 @@ One screen shows the line state per span, the D-channel, error counters and ever
 Polish version: [README.pl.md](README.pl.md)
 
 ```
- ● E1 Watch 0.1.4             E1 link and ISDN channel monitor  [DEMO: ok]             host    08:25:56
+ ● E1 Watch 0.1.5             E1 link and ISDN channel monitor  [DEMO: ok]             host    08:25:56
 
  Clock: line   Interrupts: 1000/s   Calls: 5 (ringing 2, connected 2)   Free channels: 25   Number mask:
 

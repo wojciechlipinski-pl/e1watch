@@ -39,6 +39,10 @@ class Parse(unittest.TestCase):
         c = app.calls_from_channels(rows)
         self.assertEqual((c[3]['dir'], c[3]['state']), ('IN', 'CONNECTED')); self.assertEqual((c[4]['dir'], c[4]['state']), ('OUT', 'RINGING'))
 
+    def test_outbound_numbers_caller_to_callee(self):
+        rows = [{'Channel': 'DAHDI/2-1', 'Uniqueid': '3', 'Linkedid': '2', 'ChannelStateDesc': 'Up', 'CallerIDNum': '112', 'ConnectedLineNum': '1001', 'Exten': '112'}]
+        c = app.calls_from_channels(rows)[2]; self.assertEqual((c['a'], c['b']), ('1001', '112'))
+
     def test_inbound_contexts_only_fallback(self):
         # without Uniqueid/Linkedid the context decides ...
         rows = [{'Channel': 'DAHDI/3-1', 'Context': 'from-pstn', 'ChannelStateDesc': 'Up'}]
@@ -58,6 +62,22 @@ class Parse(unittest.TestCase):
         self.assertEqual(app.span_state(ok, 'Up, Active')[0], 'green'); self.assertEqual(app.span_state(ok, 'Down, Active')[0], 'yellow')
         self.assertEqual(app.span_state({'alarm': 'RED'}, 'Up')[0], 'red'); self.assertEqual(app.span_state(ok, '?')[0], 'green')
 
+    def test_dead_tty_exits_instead_of_spinning(self):
+        class Dead:  # stdscr of a vanished terminal: getch returns -1 at once
+            def timeout(self, ms): pass
+            def getch(self): return -1
+            def erase(self): pass
+            def refresh(self): pass
+        class M:
+            def refresh(self): pass
+        saved = (app.draw, app.CursesCanvas, app.curses.curs_set)
+        app.draw = lambda *a, **k: None; app.CursesCanvas = lambda *a: None; app.curses.curs_set = lambda n: None
+        try:
+            stdscr = Dead(); stdscr.keypad = lambda f: None
+            stdscr.timeout = lambda ms: None
+            app.curses_main(stdscr, M(), type('U', (), {'u': True, 'help': False})())  # must return, not loop forever
+        finally:
+            app.draw, app.CursesCanvas, app.curses.curs_set = saved
 
 if __name__ == '__main__':
     unittest.main()

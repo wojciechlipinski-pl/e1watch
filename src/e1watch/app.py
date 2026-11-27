@@ -9,7 +9,7 @@ Link colour: GREEN = signal OK and ISDN active, YELLOW = signal OK but ISDN (D-c
 """
 import argparse, collections, configparser, curses, glob, math, os, random, re, socket, subprocess, sys, textwrap, time, unicodedata
 
-VERSION = '0.1.4'
+VERSION = '0.1.5'
 CONF_PATHS = ('/etc/e1watch.conf', os.path.expanduser('~/.config/e1watch.ini'))
 STATE_COLOR = {'BUSY': 'yellow', 'RINGING': 'cyan', 'CONNECTED': 'blue'}   # red is reserved for failures (alarm, no link)
 IRQ_DEFAULT = r'dahdi|wct|wcte|tor3|tormenta|t[24]xxp|te[0-9]xx'
@@ -221,6 +221,8 @@ def calls_from_channels(chans, inbound_contexts=(), chan_map=None):
         st = call_state(c.get('ChannelStateDesc'))
         a = c.get('CallerIDNum', ''); b = c.get('ConnectedLineNum', '') or c.get('Exten', '')
         if inbound and st != 'CONNECTED': b = c.get('Exten', '') or b
+        # outbound DAHDI leg: Asterisk puts the dialed number in CallerIDNum and our extension in ConnectedLineNum, so swap to caller -> callee
+        if not inbound: a, b = c.get('ConnectedLineNum', ''), c.get('CallerIDNum', '') or c.get('Exten', '')
         out[n] = {'dir': 'IN' if inbound else 'OUT', 'state': st, 'a': a, 'b': b, 'dur': c.get('Duration', ''), 'sec': to_seconds(c.get('Duration', ''))}
     return out
 
@@ -231,8 +233,8 @@ def demo_channels(t, scenario):
     rows = [(3, 'IN', 'Up', '4915550100123', '1001'), (7, 'OUT', 'Ringing', '1002', '4915550100456'), (12, 'IN', 'Ring', '4930555010078', '1003'),
             (18, 'OUT', 'Up', '1004', '4940555010099'), (22, 'IN', 'Down', '', '')]
     if scenario != 'ok': return []
-    return [{'Channel': 'DAHDI/%d-1' % n, 'Uniqueid': '1.1' if k == 'IN' else '2.2', 'Linkedid': '1.1', 'ChannelStateDesc': s, 'CallerIDNum': a, 'Exten': b,
-             'ConnectedLineNum': b if k == 'OUT' else '', 'Duration': '00:%02d:%02d' % (random.randint(0, 5), random.randint(0, 59))} for n, k, s, a, b in rows[:random.randint(3, 5)]]
+    return [{'Channel': 'DAHDI/%d-1' % n, 'Uniqueid': '1.1' if k == 'IN' else '2.2', 'Linkedid': '1.1', 'ChannelStateDesc': s, 'CallerIDNum': b if k == 'OUT' else a, 'Exten': b,
+             'ConnectedLineNum': a if k == 'OUT' else '', 'Duration': '00:%02d:%02d' % (random.randint(0, 5), random.randint(0, 59))} for n, k, s, a, b in rows[:random.randint(3, 5)]]
 
 
 def mask_number(num, mask):
@@ -603,14 +605,19 @@ def read_key(win, normal_timeout=250):
 
 def curses_main(stdscr, m, ui):
     curses.curs_set(0); stdscr.timeout(250); stdscr.keypad(True)
-    last = 0
+    last = 0; dead = 0
     while True:
         now = time.time()
         if now - last >= 1: m.refresh(); last = now
         stdscr.erase()
         draw(CursesCanvas(stdscr, ui.u), m, ui, now, int(now * 2) % 2, int(now * 4) % 4); stdscr.refresh()
         k = read_key(stdscr)
-        if k == -1: continue
+        if k == -1:
+            # a live terminal returns -1 only after the 250 ms timeout; instant -1 repeatedly = the tty is gone (closed ssh), so exit instead of spinning at 100% CPU
+            dead = dead + 1 if time.time() - now < 0.1 else 0
+            if dead >= 20: return
+            continue
+        dead = 0
         if ui.help: ui.help = False; continue
         if k in (ord('q'), ord('Q'), curses.KEY_F10): return
         elif k in (ord('m'), ord('M'), curses.KEY_F2): ui.mask = not ui.mask
@@ -637,7 +644,8 @@ def main(argv=None):
         c = TextCanvas(w, h, ui.u); draw(c, m, ui, time.time()); print(c.text())
         return 0
     os.environ.setdefault('ESCDELAY', '25')
-    curses.wrapper(lambda s: curses_main(s, m, ui))
+    try: curses.wrapper(lambda s: curses_main(s, m, ui))
+    except OSError: pass   # the terminal vanished (EIO on write): nothing left to draw on
     return 0
 
 
